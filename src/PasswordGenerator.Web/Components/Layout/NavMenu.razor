@@ -1,0 +1,52 @@
+@inject TokenService TokenService
+@inject NavigationManager Navigation
+
+<div class="nav-menu">
+    <div class="nav-brand">
+        <a href="#" @onclick="GoHome" @onclick:preventDefault>🔐 PassGen</a>
+    </div>
+
+    <ul class="nav-links">
+        @if (TokenService.IsAuthenticated)
+        {
+            <li><a href="/generator" class="@NavClass("/generator")">Generator</a></li>
+            <li><a href="/vault" class="@NavClass("/vault")">Vault</a></li>
+            <li><a href="#" @onclick="Logout" @onclick:preventDefault>Logout</a></li>
+        }
+        else
+        {
+            <li><a href="/login" class="@NavClass("/login")">Login</a></li>
+        }
+    </ul>
+</div>
+
+@code {
+    private string currentUrl = "";
+
+    protected override void OnInitialized()
+    {
+        currentUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
+        Navigation.LocationChanged += (_, _) =>
+        {
+            currentUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
+            StateHasChanged();
+        };
+    }
+
+    private string NavClass(string path)
+    {
+        var relativePath = "/" + currentUrl;
+        return relativePath == path ? "active" : "";
+    }
+
+    private void GoHome()
+    {
+        Navigation.NavigateTo("/", forceLoad: true);
+    }
+
+    private void Logout()
+    {
+        TokenService.ClearToken();
+        Navigation.NavigateTo("/login");
+    }
+}

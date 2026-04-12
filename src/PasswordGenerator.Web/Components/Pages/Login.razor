@@ -1,0 +1,75 @@
+@page "/"
+@page "/login"
+@inject PasswordApiClient ApiClient
+@inject TokenService TokenService
+@inject NavigationManager Navigation
+
+<PageTitle>Login - Password Generator</PageTitle>
+
+<div class="login-container">
+    <div class="login-card">
+        <h2>🔐 Password Generator</h2>
+        <p class="subtitle">Sign in to continue</p>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger">@errorMessage</div>
+        }
+
+        <EditForm Model="loginRequest" OnValidSubmit="HandleLogin" FormName="LoginForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <InputText id="username" @bind-Value="loginRequest.Username" class="form-control" placeholder="Enter username" />
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <InputText id="password" @bind-Value="loginRequest.Password" class="form-control" type="password" placeholder="Enter password" />
+            </div>
+            <button type="submit" class="btn btn-primary btn-block" disabled="@isLoading">
+                @(isLoading ? "Signing in..." : "Sign In")
+            </button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private LoginRequest loginRequest = new();
+    private string? errorMessage;
+    private bool isLoading;
+
+    protected override void OnInitialized()
+    {
+        if (TokenService.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/generator");
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var response = await ApiClient.LoginAsync(loginRequest);
+            if (response is not null)
+            {
+                TokenService.SetToken(response.Token, response.ExpiresAt);
+                Navigation.NavigateTo("/generator");
+            }
+            else
+            {
+                errorMessage = "Invalid username or password.";
+            }
+        }
+        catch
+        {
+            errorMessage = "Unable to connect to the API. Please try again.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

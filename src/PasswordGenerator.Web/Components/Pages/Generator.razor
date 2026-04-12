@@ -1,0 +1,174 @@
+@page "/generator"
+@inject PasswordApiClient ApiClient
+@inject TokenService TokenService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Generator - Password Generator</PageTitle>
+
+@if (!TokenService.IsAuthenticated)
+{
+    <div class="auth-prompt">
+        <p>Please <a href="/login">sign in</a> to use the password generator.</p>
+    </div>
+}
+else
+{
+    <div class="generator-container">
+        <h2>Password Generator</h2>
+
+        <div class="options-panel">
+            <div class="option-row">
+                <label>
+                    <InputCheckbox @bind-Value="passphraseMode" />
+                    Passphrase Mode
+                </label>
+            </div>
+
+            @if (!passphraseMode)
+            {
+                <div class="option-row">
+                    <label for="length">Length: @request.Length</label>
+                    <input type="range" id="length" min="4" max="128" @bind="request.Length" @bind:event="oninput" class="slider" />
+                </div>
+
+                <div class="checkbox-group">
+                    <label><InputCheckbox @bind-Value="request.IncludeUppercase" /> Uppercase (A-Z)</label>
+                    <label><InputCheckbox @bind-Value="request.IncludeLowercase" /> Lowercase (a-z)</label>
+                    <label><InputCheckbox @bind-Value="request.IncludeDigits" /> Digits (0-9)</label>
+                    <label><InputCheckbox @bind-Value="request.IncludeSpecial" /> Special (!@@#$...)</label>
+                    <label><InputCheckbox @bind-Value="request.ExcludeAmbiguous" /> Exclude Ambiguous (Il1O0)</label>
+                </div>
+            }
+            else
+            {
+                <div class="option-row">
+                    <label for="wordcount">Words: @request.WordCount</label>
+                    <input type="range" id="wordcount" min="2" max="10" @bind="request.WordCount" @bind:event="oninput" class="slider" />
+                </div>
+                <div class="option-row">
+                    <label for="separator">Separator</label>
+                    <InputText id="separator" @bind-Value="request.Separator" class="form-control separator-input" />
+                </div>
+            }
+        </div>
+
+        <button class="btn btn-primary btn-generate" @onclick="Generate" disabled="@isGenerating">
+            @(isGenerating ? "Generating..." : "Generate")
+        </button>
+
+        @if (result is not null)
+        {
+            <div class="result-panel">
+                <div class="password-display">
+                    <code>@result.Password</code>
+                    <button class="btn btn-icon" @onclick="CopyToClipboard" title="Copy to clipboard">📋</button>
+                </div>
+
+                <PasswordStrengthIndicator Strength="result.Strength" Entropy="result.Entropy" />
+
+                @if (!string.IsNullOrEmpty(copiedMessage))
+                {
+                    <span class="copied-msg">@copiedMessage</span>
+                }
+
+                <div class="save-section">
+                    <h4>Save to Vault</h4>
+                    <div class="save-form">
+                        <InputText @bind-Value="saveLabel" placeholder="Label (e.g. Gmail)" class="form-control" />
+                        <InputText @bind-Value="saveWebsite" placeholder="Website (optional)" class="form-control" />
+                        <button class="btn btn-secondary" @onclick="SaveToVault" disabled="@isSaving">
+                            @(isSaving ? "Saving..." : "Save")
+                        </button>
+                    </div>
+                    @if (!string.IsNullOrEmpty(saveMessage))
+                    {
+                        <span class="save-msg">@saveMessage</span>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private GenerateRequest request = new();
+    private GenerateResult? result;
+    private bool passphraseMode;
+    private bool isGenerating;
+    private string? copiedMessage;
+    private string saveLabel = "";
+    private string? saveWebsite;
+    private string? saveMessage;
+    private bool isSaving;
+
+    private async Task Generate()
+    {
+        isGenerating = true;
+        copiedMessage = null;
+        saveMessage = null;
+
+        try
+        {
+            request.PassphraseMode = passphraseMode;
+            result = passphraseMode
+                ? await ApiClient.GeneratePassphraseAsync(request)
+                : await ApiClient.GeneratePasswordAsync(request);
+        }
+        catch
+        {
+            result = null;
+        }
+        finally
+        {
+            isGenerating = false;
+        }
+    }
+
+    private async Task CopyToClipboard()
+    {
+        if (result?.Password is not null)
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", result.Password);
+            copiedMessage = "Copied!";
+            StateHasChanged();
+            await Task.Delay(2000);
+            copiedMessage = null;
+        }
+    }
+
+    private async Task SaveToVault()
+    {
+        if (string.IsNullOrWhiteSpace(saveLabel) || result?.Password is null)
+        {
+            saveMessage = "Please enter a label.";
+            return;
+        }
+
+        isSaving = true;
+        saveMessage = null;
+
+        try
+        {
+            var entry = new PasswordEntryDto
+            {
+                Label = saveLabel,
+                Password = result.Password,
+                Website = saveWebsite
+            };
+
+            await ApiClient.SaveVaultEntryAsync(entry);
+            saveMessage = "Saved to vault!";
+            saveLabel = "";
+            saveWebsite = null;
+        }
+        catch
+        {
+            saveMessage = "Failed to save.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

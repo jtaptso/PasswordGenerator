@@ -1,0 +1,214 @@
+@page "/vault"
+@inject PasswordApiClient ApiClient
+@inject TokenService TokenService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Vault - Password Generator</PageTitle>
+
+@if (!TokenService.IsAuthenticated)
+{
+    <div class="auth-prompt">
+        <p>Please <a href="/login">sign in</a> to access the vault.</p>
+    </div>
+}
+else
+{
+    <div class="vault-container">
+        <h2>Password Vault</h2>
+
+        @if (isLoading)
+        {
+            <p>Loading...</p>
+        }
+        else if (entries.Count == 0)
+        {
+            <p class="empty-vault">No saved passwords yet. <a href="/generator">Generate one</a> and save it!</p>
+        }
+        else
+        {
+            <table class="vault-table">
+                <thead>
+                    <tr>
+                        <th>Label</th>
+                        <th>Website</th>
+                        <th>Password</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var entry in entries)
+                    {
+                        <tr>
+                            <td>
+                                @if (editingId == entry.Id)
+                                {
+                                    <InputText @bind-Value="editLabel" class="form-control form-control-sm" />
+                                }
+                                else
+                                {
+                                    @entry.Label
+                                }
+                            </td>
+                            <td>
+                                @if (editingId == entry.Id)
+                                {
+                                    <InputText @bind-Value="editWebsite" class="form-control form-control-sm" />
+                                }
+                                else
+                                {
+                                    @entry.Website
+                                }
+                            </td>
+                            <td class="password-cell">
+                                @if (revealedPasswords.TryGetValue(entry.Id, out var pwd))
+                                {
+                                    <code>@pwd</code>
+                                    <button class="btn btn-icon btn-sm" @onclick="() => CopyPassword(pwd)" title="Copy">📋</button>
+                                    <button class="btn btn-icon btn-sm" @onclick="() => HidePassword(entry.Id)" title="Hide">🔒</button>
+                                }
+                                else
+                                {
+                                    <span>••••••••</span>
+                                    <button class="btn btn-icon btn-sm" @onclick="() => RevealPassword(entry.Id)" title="Reveal">👁️</button>
+                                }
+                            </td>
+                            <td>@entry.CreatedAt.ToString("yyyy-MM-dd")</td>
+                            <td class="actions-cell">
+                                @if (editingId == entry.Id)
+                                {
+                                    <button class="btn btn-sm btn-success" @onclick="() => SaveEdit(entry.Id)">Save</button>
+                                    <button class="btn btn-sm btn-secondary" @onclick="CancelEdit">Cancel</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-secondary" @onclick="() => StartEdit(entry)">Edit</button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => DeleteEntry(entry.Id)">Delete</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="status-message">@statusMessage</div>
+        }
+    </div>
+}
+
+@code {
+    private List<PasswordEntryDto> entries = [];
+    private Dictionary<int, string> revealedPasswords = new();
+    private bool isLoading = true;
+    private string? statusMessage;
+    private int? editingId;
+    private string editLabel = "";
+    private string? editWebsite;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!TokenService.IsAuthenticated)
+            return;
+
+        await LoadEntries();
+    }
+
+    private async Task LoadEntries()
+    {
+        isLoading = true;
+        try
+        {
+            entries = await ApiClient.GetVaultEntriesAsync();
+        }
+        catch
+        {
+            statusMessage = "Failed to load vault entries.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RevealPassword(int id)
+    {
+        try
+        {
+            var entry = await ApiClient.GetVaultEntryAsync(id);
+            if (entry?.Password is not null)
+            {
+                revealedPasswords[id] = entry.Password;
+            }
+        }
+        catch
+        {
+            statusMessage = "Failed to reveal password.";
+        }
+    }
+
+    private void HidePassword(int id)
+    {
+        revealedPasswords.Remove(id);
+    }
+
+    private async Task CopyPassword(string password)
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", password);
+        statusMessage = "Copied to clipboard!";
+        StateHasChanged();
+        await Task.Delay(2000);
+        statusMessage = null;
+    }
+
+    private void StartEdit(PasswordEntryDto entry)
+    {
+        editingId = entry.Id;
+        editLabel = entry.Label;
+        editWebsite = entry.Website;
+    }
+
+    private void CancelEdit()
+    {
+        editingId = null;
+    }
+
+    private async Task SaveEdit(int id)
+    {
+        try
+        {
+            var dto = new PasswordEntryDto
+            {
+                Label = editLabel,
+                Website = editWebsite
+            };
+
+            await ApiClient.UpdateVaultEntryAsync(id, dto);
+            editingId = null;
+            await LoadEntries();
+            statusMessage = "Entry updated.";
+        }
+        catch
+        {
+            statusMessage = "Failed to update entry.";
+        }
+    }
+
+    private async Task DeleteEntry(int id)
+    {
+        try
+        {
+            await ApiClient.DeleteVaultEntryAsync(id);
+            revealedPasswords.Remove(id);
+            await LoadEntries();
+            statusMessage = "Entry deleted.";
+        }
+        catch
+        {
+            statusMessage = "Failed to delete entry.";
+        }
+    }
+}

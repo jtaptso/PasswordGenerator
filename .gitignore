@@ -1,0 +1,119 @@
+# ============================================
+# .NET / ASP.NET Core / Blazor
+# ============================================
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+## NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+
+## Visual Studio / VS Code
+.vs/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+## Rider / JetBrains
+.idea/
+*.sln.iml
+
+## MSTest / NUnit / xUnit test results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+TestResult.xml
+nunit-*.xml
+
+## Build tools
+*.DotSettings.user
+[Mm]ake[Ss]hell[Cc]omd.log
+
+## Windows
+[Dd]esktop.ini
+Thumbs.db
+ehthumbs.db
+
+## macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+## Linux
+*~
+
+## ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+## dotnet tool manifest
+# .config/ — uncomment if you don't use dotnet tools
+
+## User secrets
+secrets.json
+
+## ASP.NET Core Data Protection keys
+**/DataProtection-Keys/
+
+## Entity Framework Migrations (keep tracked, but ignore local DB files)
+*.mdf
+*.ldf
+*.ndf
+
+## SQL Server files
+*.bak
+
+## Application configuration (keep templates, ignore overrides)
+appsettings.Development.json
+appsettings.Local.json
+appsettings.Production.json
+
+## Publish output
+publish/
+PublishOutput/
+
+## dotnet
+global.json
+!global.json
+
+## Coverage / analysis
+*.coverage
+*.coveragexml
+coverage/
+*.opencover.xml
+lcov.info
+
+## Node (if any JS tooling is added later)
+node_modules/
+wwwroot/lib/
+
+## Misc
+*.swp
+*.swo
+*.tmp
+*.bak
+*.orig
