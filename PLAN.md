@@ -179,6 +179,9 @@ Each user has their own isolated vault. Deleting a user cascades to their passwo
 | PUT    | `/api/vault/{id}`                  | Yes   | Update entry (own)         |
 | DELETE | `/api/vault/{id}`                  | Yes   | Delete entry (own)         |
 | POST   | `/api/admin/users/{userId}/roles`  | Admin | Assign role to user        |
+| DELETE | `/api/admin/users/{userId}/roles/{roleName}` | Admin | Remove role from user |
+| GET    | `/api/admin/users`                 | Admin | List all users             |
+| DELETE | `/api/admin/users/{userId}`        | Admin | Delete user                |
 
 ## Implementation Phases
 
@@ -249,6 +252,13 @@ Each user has their own isolated vault. Deleting a user cascades to their passwo
 45. **Seed data**: roles via EF `HasData`; default admin user via startup service (BCrypt hashing at runtime, credentials from `appsettings.json`)
 46. Register page (`/register`): username + email + password + confirm password form
 47. Update `PasswordApiClient` — add `RegisterAsync` method
+48. Admin page (`/admin`): user table with promote/demote/delete actions, visible only to Admin role
+49. `TokenService` — parse JWT to extract roles, expose `IsAdmin` property
+50. NavMenu — show "Admin" link only when `TokenService.IsAdmin` is true
+51. `AdminController` — add `GET /api/admin/users`, `DELETE /api/admin/users/{userId}`, `DELETE /api/admin/users/{userId}/roles/{roleName}`
+52. `UserDto` — DTO for user list (Id, Username, Email, Roles, CreatedAt)
+53. `PasswordApiClient` — add `GetUsersAsync`, `AssignRoleAsync`, `RemoveRoleAsync`, `DeleteUserAsync`
+54. Delete confirmation — inline "Sure? [Yes] [No]" prompt before deleting a user
 
 1. `dotnet build` — all 5 projects compile
 2. Verify dependency flow: Domain → 0 refs, Application → Domain, Infrastructure → Application + Domain, API → Application + Infrastructure, Web → Application only
@@ -267,6 +277,10 @@ Each user has their own isolated vault. Deleting a user cascades to their passwo
 15. `POST /api/admin/users/{id}/roles` as Admin → 200; as User → 403
 16. Login with seeded admin credentials → token contains "Admin" role
 17. All new endpoints visible in Swagger UI
+18. Admin page: list users with roles, promote/demote/delete actions work
+19. Admin page: delete shows inline confirmation before executing
+20. Admin page: seeded `admin` user cannot be demoted or deleted
+21. Non-admin users see "Access denied" on `/admin`
 
 ## Decisions
 
@@ -286,6 +300,6 @@ Each user has their own isolated vault. Deleting a user cascades to their passwo
 
 ## Scope
 
-**In scope**: generator, vault CRUD, encryption at rest, strength indicator, passphrase mode, JWT auth, Swagger
+**In scope**: generator, vault CRUD, encryption at rest, strength indicator, passphrase mode, JWT auth, Swagger, user registration, role-based auth, admin user management page
 
-**Out of scope**: user registration, role-based auth, browser extension, import/export, categories/tags
+**Out of scope**: browser extension, import/export, categories/tags, password reset, email confirmation, account lockout

@@ -11,6 +11,10 @@
         {
             <li><a href="/generator" class="@NavClass("/generator")">Generator</a></li>
             <li><a href="/vault" class="@NavClass("/vault")">Vault</a></li>
+            @if (TokenService.IsAdmin)
+            {
+                <li><a href="/admin" class="@NavClass("/admin")">Admin</a></li>
+            }
             <li><a href="#" @onclick="Logout" @onclick:preventDefault>Logout</a></li>
         }
         else

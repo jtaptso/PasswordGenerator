@@ -49,6 +49,7 @@ PasswordGenerator.Infrastructure
 - **Clipboard Copy** — one-click copy via JS interop
 - **JWT Authentication** — multi-user auth with role claims
 - **Swagger UI** — test all API endpoints with Bearer token support
+- **Admin Dashboard** — manage users: list, promote to Admin, demote, delete with inline confirmation
 
 ## Getting Started
 
@@ -115,6 +116,9 @@ PasswordGenerator/
 | `PUT` | `/api/vault/{id}` | Yes | Update own entry |
 | `DELETE` | `/api/vault/{id}` | Yes | Delete own entry |
 | `POST` | `/api/admin/users/{userId}/roles` | Admin | Assign role to user |
+| `DELETE` | `/api/admin/users/{userId}/roles/{roleName}` | Admin | Remove role from user |
+| `GET` | `/api/admin/users` | Admin | List all users |
+| `DELETE` | `/api/admin/users/{userId}` | Admin | Delete user |
 
 ## Configuration
 

@@ -95,4 +95,33 @@ public class PasswordApiClient
         var response = await _httpClient.DeleteAsync($"api/vault/{id}");
         response.EnsureSuccessStatusCode();
     }
+
+    // Admin endpoints
+
+    public async Task<List<UserDto>> GetUsersAsync()
+    {
+        SetAuthHeader();
+        return await _httpClient.GetFromJsonAsync<List<UserDto>>("api/admin/users") ?? [];
+    }
+
+    public async Task<bool> AssignRoleAsync(int userId, string roleName)
+    {
+        SetAuthHeader();
+        var response = await _httpClient.PostAsJsonAsync($"api/admin/users/{userId}/roles", new { roleName });
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> RemoveRoleAsync(int userId, string roleName)
+    {
+        SetAuthHeader();
+        var response = await _httpClient.DeleteAsync($"api/admin/users/{userId}/roles/{roleName}");
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> DeleteUserAsync(int userId)
+    {
+        SetAuthHeader();
+        var response = await _httpClient.DeleteAsync($"api/admin/users/{userId}");
+        return response.IsSuccessStatusCode;
+    }
 }

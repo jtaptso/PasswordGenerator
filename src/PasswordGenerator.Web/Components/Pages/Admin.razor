@@ -1,0 +1,232 @@
+@page "/admin"
+@inject PasswordApiClient ApiClient
+@inject TokenService TokenService
+@inject NavigationManager Navigation
+
+<PageTitle>Admin - Password Generator</PageTitle>
+
+@if (!TokenService.IsAuthenticated || !TokenService.IsAdmin)
+{
+    <div class="auth-prompt">
+        <p>Access denied. You must be an <strong>Admin</strong> to view this page.</p>
+        <p><a href="/login">Sign in</a> with an admin account.</p>
+    </div>
+}
+else
+{
+    <div class="vault-container">
+        <h2>User Management</h2>
+
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="alert @(isError ? "alert-danger" : "alert-success")">@statusMessage</div>
+        }
+
+        @if (isLoading)
+        {
+            <p>Loading...</p>
+        }
+        else if (users.Count == 0)
+        {
+            <p>No users found.</p>
+        }
+        else
+        {
+            <table class="vault-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Roles</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var user in users)
+                    {
+                        <tr>
+                            <td>@user.Id</td>
+                            <td>@user.Username</td>
+                            <td>@user.Email</td>
+                            <td>
+                                @foreach (var role in user.Roles)
+                                {
+                                    <span class="role-badge @(role == "Admin" ? "role-admin" : "role-user")">@role</span>
+                                }
+                            </td>
+                            <td>@user.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td>
+                                @if (!user.Roles.Contains("Admin"))
+                                {
+                                    <button class="btn btn-sm btn-outline" @onclick="() => PromoteToAdmin(user.Id)" title="Promote to Admin">
+                                        Promote
+                                    </button>
+                                }
+                                else if (user.Username != "admin")
+                                {
+                                    <button class="btn btn-sm btn-outline-warning" @onclick="() => DemoteFromAdmin(user.Id)" title="Remove Admin role">
+                                        Demote
+                                    </button>
+                                }
+                                @if (user.Username != "admin")
+                                {
+                                    @if (confirmDeleteId == user.Id)
+                                    {
+                                        <span class="confirm-delete">
+                                            Sure?
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmDeleteUser(user.Id, user.Username)">Yes</button>
+                                            <button class="btn btn-sm btn-outline" @onclick="CancelDelete">No</button>
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => RequestDelete(user.Id)" title="Delete user">
+                                            Delete
+                                        </button>
+                                    }
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+@code {
+    private List<UserDto> users = [];
+    private bool isLoading = true;
+    private string? statusMessage;
+    private bool isError;
+    private int? confirmDeleteId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!TokenService.IsAuthenticated || !TokenService.IsAdmin)
+            return;
+
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        isLoading = true;
+        try
+        {
+            users = await ApiClient.GetUsersAsync();
+        }
+        catch
+        {
+            statusMessage = "Failed to load users.";
+            isError = true;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task PromoteToAdmin(int userId)
+    {
+        await AssignRole(userId, "Admin");
+    }
+
+    private async Task DemoteFromAdmin(int userId)
+    {
+        await RemoveRole(userId, "Admin");
+    }
+
+    private void RequestDelete(int userId)
+    {
+        confirmDeleteId = userId;
+    }
+
+    private void CancelDelete()
+    {
+        confirmDeleteId = null;
+    }
+
+    private async Task ConfirmDeleteUser(int userId, string username)
+    {
+        await DeleteUser(userId, username);
+    }
+
+    private async Task DeleteUser(int userId, string username)
+    {
+        confirmDeleteId = null;
+        statusMessage = null;
+        try
+        {
+            var success = await ApiClient.DeleteUserAsync(userId);
+            if (success)
+            {
+                statusMessage = $"User '{username}' deleted.";
+                isError = false;
+                await LoadUsers();
+            }
+            else
+            {
+                statusMessage = $"Failed to delete user '{username}'.";
+                isError = true;
+            }
+        }
+        catch
+        {
+            statusMessage = "An error occurred.";
+            isError = true;
+        }
+    }
+
+    private async Task RemoveRole(int userId, string roleName)
+    {
+        statusMessage = null;
+        try
+        {
+            var success = await ApiClient.RemoveRoleAsync(userId, roleName);
+            if (success)
+            {
+                statusMessage = $"Role '{roleName}' removed successfully.";
+                isError = false;
+                await LoadUsers();
+            }
+            else
+            {
+                statusMessage = $"Failed to remove role '{roleName}'.";
+                isError = true;
+            }
+        }
+        catch
+        {
+            statusMessage = "An error occurred.";
+            isError = true;
+        }
+    }
+
+    private async Task AssignRole(int userId, string roleName)
+    {
+        statusMessage = null;
+        try
+        {
+            var success = await ApiClient.AssignRoleAsync(userId, roleName);
+            if (success)
+            {
+                statusMessage = $"Role '{roleName}' assigned successfully.";
+                isError = false;
+                await LoadUsers();
+            }
+            else
+            {
+                statusMessage = $"Failed to assign role '{roleName}'.";
+                isError = true;
+            }
+        }
+        catch
+        {
+            statusMessage = "An error occurred.";
+            isError = true;
+        }
+    }
+}

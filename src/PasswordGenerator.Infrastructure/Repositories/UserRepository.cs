@@ -14,6 +14,15 @@ public class UserRepository : IUserRepository
         _context = context;
     }
 
+    public async Task<List<User>> GetAllAsync()
+    {
+        return await _context.Users
+            .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+            .OrderBy(u => u.Username)
+            .ToListAsync();
+    }
+
     public async Task<User?> GetByUsernameAsync(string username)
     {
         return await _context.Users
@@ -55,5 +64,15 @@ public class UserRepository : IUserRepository
     {
         _context.Users.Update(user);
         await _context.SaveChangesAsync();
+    }
+
+    public async Task DeleteAsync(int id)
+    {
+        var user = await _context.Users.FindAsync(id);
+        if (user is not null)
+        {
+            _context.Users.Remove(user);
+            await _context.SaveChangesAsync();
+        }
     }
 }

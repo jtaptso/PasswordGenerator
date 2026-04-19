@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PasswordGenerator.Application.DTOs;
 using PasswordGenerator.Application.Interfaces;
 using PasswordGenerator.Domain.Entities;
 
@@ -15,6 +16,22 @@ public class AdminController : ControllerBase
     public AdminController(IUserRepository userRepository)
     {
         _userRepository = userRepository;
+    }
+
+    [HttpGet("users")]
+    public async Task<IActionResult> GetUsers()
+    {
+        var users = await _userRepository.GetAllAsync();
+        var result = users.Select(u => new UserDto
+        {
+            Id = u.Id,
+            Username = u.Username,
+            Email = u.Email,
+            Roles = u.UserRoles.Select(ur => ur.Role.Name).ToList(),
+            CreatedAt = u.CreatedAt
+        }).ToList();
+
+        return Ok(result);
     }
 
     [HttpPost("users/{userId:int}/roles")]
@@ -43,6 +60,38 @@ public class AdminController : ControllerBase
         await _userRepository.UpdateAsync(user);
 
         return Ok(new { message = $"Role '{request.RoleName}' assigned to user '{user.Username}'." });
+    }
+
+    [HttpDelete("users/{userId:int}/roles/{roleName}")]
+    public async Task<IActionResult> RemoveRole(int userId, string roleName)
+    {
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user is null)
+            return NotFound(new { message = "User not found." });
+
+        var existingRole = user.UserRoles.FirstOrDefault(ur => ur.Role.Name == roleName);
+        if (existingRole is null)
+            return BadRequest(new { message = $"User does not have the '{roleName}' role." });
+
+        if (roleName == "User")
+            return BadRequest(new { message = "Cannot remove the 'User' role." });
+
+        user.UserRoles.Remove(existingRole);
+        await _userRepository.UpdateAsync(user);
+
+        return Ok(new { message = $"Role '{roleName}' removed from user '{user.Username}'." });
+    }
+
+    [HttpDelete("users/{userId:int}")]
+    public async Task<IActionResult> DeleteUser(int userId)
+    {
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user is null)
+            return NotFound(new { message = "User not found." });
+
+        await _userRepository.DeleteAsync(userId);
+
+        return Ok(new { message = $"User '{user.Username}' deleted." });
     }
 }
 
