@@ -1,7 +1,11 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using PasswordGenerator.Application.Interfaces;
+using PasswordGenerator.Domain.Entities;
 using PasswordGenerator.Infrastructure;
+using PasswordGenerator.Infrastructure.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -69,5 +73,32 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Seed admin user at startup
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.EnsureCreated();
+
+    if (!db.Users.Any(u => u.Username == app.Configuration["Seed:AdminUsername"]))
+    {
+        var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+        var adminUser = new User
+        {
+            Username = app.Configuration["Seed:AdminUsername"] ?? "admin",
+            Email = app.Configuration["Seed:AdminEmail"] ?? "admin@passwordgenerator.local",
+            PasswordHash = hasher.Hash(app.Configuration["Seed:AdminPassword"] ?? "P@ssw0rd!"),
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            UserRoles =
+            [
+                new UserRole { RoleId = 1 }, // Admin
+                new UserRole { RoleId = 2 }  // User
+            ]
+        };
+        db.Users.Add(adminUser);
+        db.SaveChanges();
+    }
+}
 
 app.Run();

@@ -14,16 +14,18 @@ public class VaultRepository : IVaultRepository
         _context = context;
     }
 
-    public async Task<List<PasswordEntry>> GetAllAsync()
+    public async Task<List<PasswordEntry>> GetAllAsync(int userId)
     {
         return await _context.PasswordEntries
+            .Where(e => e.UserId == userId)
             .OrderByDescending(e => e.UpdatedAt)
             .ToListAsync();
     }
 
-    public async Task<PasswordEntry?> GetByIdAsync(int id)
+    public async Task<PasswordEntry?> GetByIdAsync(int id, int userId)
     {
-        return await _context.PasswordEntries.FindAsync(id);
+        return await _context.PasswordEntries
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
     }
 
     public async Task<PasswordEntry> AddAsync(PasswordEntry entry)
@@ -40,9 +42,10 @@ public class VaultRepository : IVaultRepository
         return entry;
     }
 
-    public async Task DeleteAsync(int id)
+    public async Task DeleteAsync(int id, int userId)
     {
-        var entry = await _context.PasswordEntries.FindAsync(id);
+        var entry = await _context.PasswordEntries
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
         if (entry is not null)
         {
             _context.PasswordEntries.Remove(entry);

@@ -11,6 +11,16 @@ public class PasswordEntryConfiguration : IEntityTypeConfiguration<PasswordEntry
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).ValueGeneratedOnAdd();
 
+        builder.Property(e => e.UserId)
+            .IsRequired();
+
+        builder.HasOne(e => e.User)
+            .WithMany(u => u.PasswordEntries)
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(e => e.UserId);
+
         builder.Property(e => e.Label)
             .HasMaxLength(200)
             .IsRequired();

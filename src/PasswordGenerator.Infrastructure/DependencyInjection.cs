@@ -19,9 +19,12 @@ public static class DependencyInjection
         services.AddDataProtection();
 
         services.AddScoped<IVaultRepository, VaultRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IEncryptionService, EncryptionService>();
+        services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
         services.AddScoped<IPasswordGeneratorService, PasswordGeneratorService>();
         services.AddScoped<VaultService>();
+        services.AddScoped<AuthService>();
 
         return services;
     }

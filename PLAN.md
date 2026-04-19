@@ -4,6 +4,8 @@
 
 Standalone ASP.NET Core Web API (reusable, JWT-secured) + separate Blazor Server UI that consumes it via `HttpClient`. Clean Architecture across 5 projects. Built with .NET 10.
 
+Multi-user application with custom User/Role entities (no ASP.NET Identity). Users register with username, email, and password (hashed with BCrypt). Each user can have multiple roles (many-to-many). Two seeded roles: **Admin** and **User**. New registrations receive the "User" role by default; only Admins can assign additional roles. Each user has their own isolated password vault.
+
 ## Architecture & Dependency Flow
 
 ```
@@ -37,6 +39,8 @@ PasswordGenerator.Infrastructure
 | Database       | SQL Server + Entity Framework Core           |
 | Encryption     | ASP.NET Core Data Protection API             |
 | Authentication | JWT Bearer Tokens                            |
+| Authorization  | Role-based (Admin, User) with custom entities|
+| Password Hash  | BCrypt (via BCrypt.Net-Next)                 |
 | Communication  | REST (HttpClient)                            |
 
 ## Project Structure
@@ -48,7 +52,10 @@ PasswordGenerator/
 ├── src/
 │   ├── PasswordGenerator.Domain/
 │   │   ├── Entities/
-│   │   │   └── PasswordEntry.cs
+│   │   │   ├── PasswordEntry.cs
+│   │   │   ├── User.cs
+│   │   │   ├── Role.cs
+│   │   │   └── UserRole.cs
 │   │   └── Enums/
 │   │       └── PasswordStrength.cs
 │   │
@@ -56,17 +63,22 @@ PasswordGenerator/
 │   │   ├── Interfaces/
 │   │   │   ├── IPasswordGeneratorService.cs
 │   │   │   ├── IEncryptionService.cs
-│   │   │   └── IVaultRepository.cs
+│   │   │   ├── IVaultRepository.cs
+│   │   │   ├── IUserRepository.cs
+│   │   │   └── IPasswordHasher.cs
 │   │   ├── DTOs/
 │   │   │   ├── GenerateRequest.cs
 │   │   │   ├── GenerateResult.cs
 │   │   │   ├── PasswordEntryDto.cs
 │   │   │   ├── LoginRequest.cs
-│   │   │   └── TokenResponse.cs
+│   │   │   ├── TokenResponse.cs
+│   │   │   ├── RegisterRequest.cs
+│   │   │   └── RegisterResult.cs
 │   │   └── Services/
 │   │       ├── PasswordGeneratorService.cs
 │   │       ├── PasswordStrengthCalculator.cs
-│   │       └── VaultService.cs
+│   │       ├── VaultService.cs
+│   │       └── AuthService.cs
 │   │
 │   ├── PasswordGenerator.Infrastructure/
 │   │   ├── Data/
@@ -84,7 +96,8 @@ PasswordGenerator/
 │   │   ├── Controllers/
 │   │   │   ├── AuthController.cs
 │   │   │   ├── GeneratorController.cs
-│   │   │   └── VaultController.cs
+│   │   │   ├── VaultController.cs
+│   │   │   └── AdminController.cs
 │   │   ├── Program.cs
 │   │   └── appsettings.json
 │   │
@@ -93,7 +106,8 @@ PasswordGenerator/
 │       │   ├── Pages/
 │       │   │   ├── Generator.razor
 │       │   │   ├── Vault.razor
-│       │   │   └── Login.razor
+│       │   │   ├── Login.razor
+│       │   │   └── Register.razor
 │       │   ├── Layout/
 │       │   │   ├── MainLayout.razor
 │       │   │   └── NavMenu.razor
@@ -107,32 +121,64 @@ PasswordGenerator/
 
 ## Database Schema
 
+### Table: `Users`
+
+| Column       | Type           | Notes                          |
+|--------------|----------------|--------------------------------|
+| Id           | int (PK)       | Auto-increment                 |
+| Username     | nvarchar(50)   | Required, unique index         |
+| Email        | nvarchar(200)  | Required, unique index         |
+| PasswordHash | nvarchar(max)  | BCrypt hashed                  |
+| CreatedAt    | datetime2      | UTC                            |
+| UpdatedAt    | datetime2      | UTC                            |
+
+### Table: `Roles`
+
+| Column | Type          | Notes                              |
+|--------|---------------|------------------------------------|
+| Id     | int (PK)      | Auto-increment                     |
+| Name   | nvarchar(50)  | Required, unique index             |
+
+Seeded data: **Admin** (Id=1), **User** (Id=2).
+
+### Table: `UserRoles`
+
+| Column | Type     | Notes                        |
+|--------|----------|------------------------------|
+| UserId | int (FK) | Composite PK, FK to Users    |
+| RoleId | int (FK) | Composite PK, FK to Roles    |
+
+Many-to-many join table. A user can have multiple roles.
+
 ### Table: `PasswordEntries`
 
 | Column            | Type           | Notes                            |
 |-------------------|----------------|----------------------------------|
 | Id                | int (PK)       | Auto-increment                   |
+| UserId            | int (FK)       | FK to Users, cascade delete      |
 | Label             | nvarchar(200)  | User-given name (e.g. "Gmail")   |
 | EncryptedPassword | nvarchar(max)  | Encrypted via Data Protection API|
 | Website           | nvarchar(500)  | Optional URL                     |
 | CreatedAt         | datetime2      | UTC                              |
 | UpdatedAt         | datetime2      | UTC                              |
 
-JWT auth uses a pre-configured username/password from user secrets — no `Users` table needed (single-user app).
+Each user has their own isolated vault. Deleting a user cascades to their password entries.
 
 ## API Endpoints
 
-| Method | Endpoint                    | Auth | Purpose              |
-|--------|-----------------------------|------|----------------------|
-| POST   | `/api/auth/login`           | No   | Get JWT token        |
-| POST   | `/api/generator/password`   | Yes  | Generate password    |
-| POST   | `/api/generator/passphrase` | Yes  | Generate passphrase  |
-| POST   | `/api/generator/strength`   | Yes  | Calculate strength   |
-| GET    | `/api/vault`                | Yes  | List saved entries   |
-| GET    | `/api/vault/{id}`           | Yes  | Get single entry     |
-| POST   | `/api/vault`                | Yes  | Save new entry       |
-| PUT    | `/api/vault/{id}`           | Yes  | Update entry         |
-| DELETE | `/api/vault/{id}`           | Yes  | Delete entry         |
+| Method | Endpoint                           | Auth  | Purpose                    |
+|--------|------------------------------------|-------|----------------------------|
+| POST   | `/api/auth/register`               | No    | Register new user          |
+| POST   | `/api/auth/login`                  | No    | Get JWT token              |
+| POST   | `/api/generator/password`          | Yes   | Generate password          |
+| POST   | `/api/generator/passphrase`        | Yes   | Generate passphrase        |
+| POST   | `/api/generator/strength`          | Yes   | Calculate strength         |
+| GET    | `/api/vault`                       | Yes   | List saved entries (own)   |
+| GET    | `/api/vault/{id}`                  | Yes   | Get single entry (own)     |
+| POST   | `/api/vault`                       | Yes   | Save new entry             |
+| PUT    | `/api/vault/{id}`                  | Yes   | Update entry (own)         |
+| DELETE | `/api/vault/{id}`                  | Yes   | Delete entry (own)         |
+| POST   | `/api/admin/users/{userId}/roles`  | Admin | Assign role to user        |
 
 ## Implementation Phases
 
@@ -140,7 +186,7 @@ JWT auth uses a pre-configured username/password from user secrets — no `Users
 
 1. Create solution with 5 projects (3 class libraries + 2 web apps), set project references per dependency diagram
 2. NuGet packages:
-   - **Infrastructure**: `Microsoft.EntityFrameworkCore.SqlServer`, `Microsoft.EntityFrameworkCore.Tools`, `Microsoft.AspNetCore.DataProtection`
+   - **Infrastructure**: `Microsoft.EntityFrameworkCore.SqlServer`, `Microsoft.EntityFrameworkCore.Tools`, `Microsoft.AspNetCore.DataProtection`, `BCrypt.Net-Next`
    - **API**: `Microsoft.AspNetCore.Authentication.JwtBearer`
    - **Web**: default Blazor Server packages
 3. Configure SQL Server connection string in API's `appsettings.json`
@@ -181,7 +227,28 @@ JWT auth uses a pre-configured username/password from user secrets — no `Users
 26. Vault page (`/vault`): table with reveal / copy / edit / delete actions
 27. NavMenu: Login / Generator / Vault links (show/hide based on auth state)
 
-## Verification Checklist
+### Phase 6 — User Registration & Roles
+
+28. **Domain entities**: `User` (Id, Username, Email, PasswordHash, CreatedAt, UpdatedAt), `Role` (Id, Name), `UserRole` (UserId, RoleId — composite PK)
+29. Update `PasswordEntry` — add `UserId` FK + `User` navigation property
+30. **EF configurations**: `UserConfiguration` (unique indexes on Username/Email), `RoleConfiguration` (unique on Name, seed Admin + User), `UserRoleConfiguration` (composite key, relationships)
+31. Update `PasswordEntryConfiguration` — add UserId FK with cascade delete
+32. Update `AppDbContext` — add `DbSet<User>`, `DbSet<Role>`, `DbSet<UserRole>`, apply new configurations
+33. `IUserRepository` interface — `GetByUsernameAsync`, `GetByEmailAsync`, `AddAsync`, `ExistsAsync`
+34. `UserRepository` implementation — includes `UserRoles.Role` navigation in queries
+35. `IPasswordHasher` interface — `Hash(password)`, `Verify(password, hash)`
+36. `BCryptPasswordHasher` implementation using `BCrypt.Net-Next`
+37. Update `DependencyInjection.cs` — register `IUserRepository`, `IPasswordHasher`, `AuthService`
+38. `RegisterRequest` DTO (Username min 3, Email, Password min 8) + `RegisterResult` DTO (Success, Errors, UserId)
+39. `AuthService` — `RegisterAsync` (validate uniqueness, hash password, assign "User" role), `ValidateCredentialsAsync` (replaces hardcoded check, returns User with roles)
+40. Update `VaultService` — all methods accept `userId` parameter
+41. Update `IVaultRepository` + `VaultRepository` — filter all queries by `UserId`
+42. Update `AuthController` — add `POST /api/auth/register`, refactor login to use `AuthService`, include `ClaimTypes.Role` and `ClaimTypes.NameIdentifier` in JWT, remove hardcoded credentials
+43. Update `VaultController` — extract UserId from JWT claims, pass to `VaultService`
+44. `AdminController` — `POST /api/admin/users/{userId}/roles` with `[Authorize(Roles = "Admin")]`
+45. **Seed data**: roles via EF `HasData`; default admin user via startup service (BCrypt hashing at runtime, credentials from `appsettings.json`)
+46. Register page (`/register`): username + email + password + confirm password form
+47. Update `PasswordApiClient` — add `RegisterAsync` method
 
 1. `dotnet build` — all 5 projects compile
 2. Verify dependency flow: Domain → 0 refs, Application → Domain, Infrastructure → Application + Domain, API → Application + Infrastructure, Web → Application only
@@ -193,11 +260,25 @@ JWT auth uses a pre-configured username/password from user secrets — no `Users
 8. Blazor UI: login → generate → save → vault shows entry → reveal/edit/delete work
 9. Passphrase mode + strength indicator work
 10. API is callable independently (Postman/curl)
+11. `POST /api/auth/register` with valid data → 200 with success result
+12. Register with duplicate username or email → 400 with error message
+13. Login with registered user → JWT contains `role` and `nameidentifier` claims
+14. Vault isolation: User A's entries are not visible to User B
+15. `POST /api/admin/users/{id}/roles` as Admin → 200; as User → 403
+16. Login with seeded admin credentials → token contains "Admin" role
+17. All new endpoints visible in Swagger UI
 
 ## Decisions
 
 - **Separate API + UI** — API is independently deployable and reusable
-- **JWT auth** — single pre-configured user (credentials in user secrets), no Users table
+- **JWT auth** — multi-user with role claims (`ClaimTypes.Role`, `ClaimTypes.NameIdentifier`)
+- **Custom User/Role entities** — no ASP.NET Identity; lightweight, full control
+- **BCrypt password hashing** — industry standard with built-in salt and configurable work factor
+- **Many-to-many User↔Role** — composite PK `(UserId, RoleId)` via `UserRole` join entity
+- **Default "User" role on registration** — Admin-only escalation for additional roles
+- **Per-user vault isolation** — `UserId` FK on `PasswordEntry`, cascade delete
+- **Admin + User roles seeded** — roles via EF `HasData`; admin user via startup service (runtime BCrypt hashing)
+- **Out of scope** — password reset, email confirmation, account lockout, user profile management
 - **Clean Architecture** — 5 projects with strict dependency flow
 - **Web references Application for DTOs only** — all data flows through the API
 - **Encryption**: ASP.NET Core Data Protection API (machine-scoped keys by default)

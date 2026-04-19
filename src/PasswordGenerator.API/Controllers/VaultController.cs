@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PasswordGenerator.Application.DTOs;
@@ -17,17 +18,19 @@ public class VaultController : ControllerBase
         _vaultService = vaultService;
     }
 
+    private int GetUserId() => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        var entries = await _vaultService.GetAllAsync();
+        var entries = await _vaultService.GetAllAsync(GetUserId());
         return Ok(entries);
     }
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
-        var entry = await _vaultService.GetByIdAsync(id);
+        var entry = await _vaultService.GetByIdAsync(id, GetUserId());
         if (entry is null) return NotFound();
         return Ok(entry);
     }
@@ -35,14 +38,14 @@ public class VaultController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] PasswordEntryDto dto)
     {
-        var created = await _vaultService.AddAsync(dto);
+        var created = await _vaultService.AddAsync(dto, GetUserId());
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] PasswordEntryDto dto)
     {
-        var updated = await _vaultService.UpdateAsync(id, dto);
+        var updated = await _vaultService.UpdateAsync(id, dto, GetUserId());
         if (updated is null) return NotFound();
         return Ok(updated);
     }
@@ -50,7 +53,7 @@ public class VaultController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        await _vaultService.DeleteAsync(id);
+        await _vaultService.DeleteAsync(id, GetUserId());
         return NoContent();
     }
 }

@@ -31,6 +31,12 @@ public class PasswordApiClient
         return await response.Content.ReadFromJsonAsync<TokenResponse>();
     }
 
+    public async Task<RegisterResult?> RegisterAsync(RegisterRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/auth/register", request);
+        return await response.Content.ReadFromJsonAsync<RegisterResult>();
+    }
+
     public async Task<GenerateResult?> GeneratePasswordAsync(GenerateRequest request)
     {
         SetAuthHeader();

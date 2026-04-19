@@ -4,6 +4,8 @@ using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using PasswordGenerator.Application.DTOs;
+using PasswordGenerator.Application.Services;
+using PasswordGenerator.Domain.Entities;
 
 namespace PasswordGenerator.API.Controllers;
 
@@ -12,24 +14,36 @@ namespace PasswordGenerator.API.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IConfiguration _configuration;
+    private readonly AuthService _authService;
 
-    public AuthController(IConfiguration configuration)
+    public AuthController(IConfiguration configuration, AuthService authService)
     {
         _configuration = configuration;
+        _authService = authService;
+    }
+
+    [HttpPost("register")]
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+    {
+        var result = await _authService.RegisterAsync(request);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
     }
 
     [HttpPost("login")]
-    public IActionResult Login([FromBody] LoginRequest request)
+    public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        var validUsername = _configuration["Auth:Username"];
-        var validPassword = _configuration["Auth:Password"];
-
-        if (request.Username != validUsername || request.Password != validPassword)
+        var user = await _authService.ValidateCredentialsAsync(request.Username, request.Password);
+        if (user is null)
         {
             return Unauthorized(new { message = "Invalid credentials" });
         }
 
-        var token = GenerateJwtToken(request.Username);
+        var token = GenerateJwtToken(user);
         var expiryMinutes = int.Parse(_configuration["Jwt:ExpiryMinutes"] ?? "60");
 
         return Ok(new TokenResponse
@@ -39,17 +53,23 @@ public class AuthController : ControllerBase
         });
     }
 
-    private string GenerateJwtToken(string username)
+    private string GenerateJwtToken(User user)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var expiryMinutes = int.Parse(_configuration["Jwt:ExpiryMinutes"] ?? "60");
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.Name, username),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(ClaimTypes.Name, user.Username),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
+
+        foreach (var userRole in user.UserRoles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, userRole.Role.Name));
+        }
 
         var token = new JwtSecurityToken(
             issuer: _configuration["Jwt:Issuer"],

@@ -15,9 +15,9 @@ public class VaultService
         _encryption = encryption;
     }
 
-    public async Task<List<PasswordEntryDto>> GetAllAsync()
+    public async Task<List<PasswordEntryDto>> GetAllAsync(int userId)
     {
-        var entries = await _repository.GetAllAsync();
+        var entries = await _repository.GetAllAsync(userId);
         return entries.Select(e => new PasswordEntryDto
         {
             Id = e.Id,
@@ -28,9 +28,9 @@ public class VaultService
         }).ToList();
     }
 
-    public async Task<PasswordEntryDto?> GetByIdAsync(int id)
+    public async Task<PasswordEntryDto?> GetByIdAsync(int id, int userId)
     {
-        var entry = await _repository.GetByIdAsync(id);
+        var entry = await _repository.GetByIdAsync(id, userId);
         if (entry is null) return null;
 
         return new PasswordEntryDto
@@ -44,10 +44,11 @@ public class VaultService
         };
     }
 
-    public async Task<PasswordEntryDto> AddAsync(PasswordEntryDto dto)
+    public async Task<PasswordEntryDto> AddAsync(PasswordEntryDto dto, int userId)
     {
         var entry = new PasswordEntry
         {
+            UserId = userId,
             Label = dto.Label,
             EncryptedPassword = _encryption.Encrypt(dto.Password ?? string.Empty),
             Website = dto.Website,
@@ -67,9 +68,9 @@ public class VaultService
         };
     }
 
-    public async Task<PasswordEntryDto?> UpdateAsync(int id, PasswordEntryDto dto)
+    public async Task<PasswordEntryDto?> UpdateAsync(int id, PasswordEntryDto dto, int userId)
     {
-        var existing = await _repository.GetByIdAsync(id);
+        var existing = await _repository.GetByIdAsync(id, userId);
         if (existing is null) return null;
 
         existing.Label = dto.Label;
@@ -93,8 +94,8 @@ public class VaultService
         };
     }
 
-    public async Task DeleteAsync(int id)
+    public async Task DeleteAsync(int id, int userId)
     {
-        await _repository.DeleteAsync(id);
+        await _repository.DeleteAsync(id, userId);
     }
 }
